@@ -4,16 +4,14 @@ import google.generativeai as genai
 import pandas as pd
 import streamlit as st
 
-# Configure Gemini API using Streamlit Secrets
+# Configure Gemini API with your secret key
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-
 model = genai.GenerativeModel("gemini-3.6-flash")
 
 # Database Initialization with Timestamp tracking
 def init_db():
     conn = sqlite3.connect("todos.db")
     c = conn.cursor()
-    # Added created_at column to support historical analysis
     c.execute(
         """CREATE TABLE IF NOT EXISTS tasks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,7 +23,6 @@ def init_db():
                     created_at TEXT
                 )"""
     )
-    # Check if column exists (migration helper if database already exists)
     c.execute("PRAGMA table_info(tasks)")
     columns = [col[1] for col in c.fetchall()]
     if "created_at" not in columns:
@@ -97,8 +94,7 @@ else:
     st.sidebar.metric(label="Productivity Score", value="0/100")
     st.sidebar.info("🎯 Your board is clean. Add a task to kickstart your day!")
 
-
-# App Navigation Tabs (Added Progress Analytics tab)
+# App Navigation Tabs
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Tasks & NLP Input", 
     "AI Goal Breakdown", 
@@ -113,7 +109,7 @@ with tab1:
     nl_input = st.text_input("Type naturally (e.g., 'Finish project report by Friday high priority')", key="nl_in")
     
     if st.button("Parse & Add Task"):
-        if nl_input:
+        if nl_input.strip():
             with st.spinner("AI is parsing your task..."):
                 prompt = (
                     f"Extract the following details from this text: '{nl_input}'. "
@@ -133,6 +129,8 @@ with tab1:
                     add_task_db(nl_input, "Anytime", "Medium", "30 mins")
                     st.success("Added with default attributes!")
                     st.rerun()
+        else:
+            st.warning("Please enter some text first.")
 
     st.subheader("Your Task Board")
     df_tasks = load_tasks()
@@ -162,10 +160,15 @@ with tab2:
     st.subheader("Decompose Big Goals")
     big_goal = st.text_input("Enter a complex goal:", placeholder="e.g., Build a personal portfolio website")
     if st.button("Decompose Goal"):
-        if big_goal:
+        if big_goal.strip():
             with st.spinner("Breaking down your goal..."):
                 prompt = f"Break down this goal into 4 concrete subtasks: {big_goal}"
-                st.session_state.ai_breakdown = model.generate_content(prompt).text
+                try:
+                    st.session_state.ai_breakdown = model.generate_content(prompt).text
+                except Exception as e:
+                    st.error("Could not reach AI model. Please check your text input or API status.")
+        else:
+            st.warning("Please enter a valid goal statement.")
                 
     if st.session_state.ai_breakdown:
         st.markdown(st.session_state.ai_breakdown)
@@ -179,7 +182,10 @@ with tab3:
         if pending:
             with st.spinner("AI is organizing your daily schedule..."):
                 prompt = f"Create an optimized chronological hourly time-block schedule for today based on these pending tasks: {pending}"
-                st.session_state.ai_schedule = model.generate_content(prompt).text
+                try:
+                    st.session_state.ai_schedule = model.generate_content(prompt).text
+                except Exception as e:
+                    st.error("Failed to generate schedule from AI engine.")
         else:
             st.warning("No pending tasks to schedule!")
             
@@ -195,33 +201,30 @@ with tab4:
         pending_count = len(df[df["done"] == 0])
         with st.spinner("Analyzing progress..."):
             prompt = f"I have completed {completed_count} tasks and have {pending_count} pending tasks. Give a short, encouraging productivity coaching summary and actionable advice."
-            st.session_state.ai_coach_advice = model.generate_content(prompt).text
+            try:
+                st.session_state.ai_coach_advice = model.generate_content(prompt).text
+            except Exception as e:
+                st.error("Could not fetch advice from productivity engine.")
             
     if st.session_state.ai_coach_advice:
         st.markdown(st.session_state.ai_coach_advice)
 
-# --- NEW TAB 5: PROGRESS ANALYTICS ---
+# --- TAB 5: PROGRESS ANALYTICS ---
 with tab5:
     st.subheader("📊 Performance Analytics")
-    
     df_analytics = load_tasks()
     
     if not df_analytics.empty:
-        # Fill missing timestamps with current time for historical fallback stability
         df_analytics["created_at"] = df_analytics["created_at"].fillna(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         df_analytics["date_only"] = df_analytics["created_at"].apply(lambda x: x.split(" ")[0])
         
-        # User Selection for Time Frames
         time_frame = st.selectbox("Select Analytics Range:", ["Past Day (Hourly View)", "Past Week", "Past Month"])
-        
         now = datetime.now()
         
         if time_frame == "Past Day (Hourly View)":
             st.write("### Tasks Logged Today")
-            # Grouping item count by today's date
             today_str = now.strftime("%Y-%m-%d")
             today_df = df_analytics[df_analytics["date_only"] == today_str]
-            
             if not today_df.empty:
                 chart_data = today_df.groupby("priority").size().reset_index(name="Task Count")
                 st.bar_chart(data=chart_data, x="priority", y="Task Count")
@@ -232,9 +235,7 @@ with tab5:
             st.write("### Weekly Complete vs Pending Distribution")
             start_week = (now - timedelta(days=7)).strftime("%Y-%m-%d")
             filtered_df = df_analytics[df_analytics["date_only"] >= start_week]
-            
             if not filtered_df.empty:
-                # Create pivot structure of dates vs status counts
                 weekly_data = filtered_df.groupby(["date_only", "done"]).size().unstack(fill_value=0)
                 weekly_data = weekly_data.rename(columns={0: "Pending Tasks", 1: "Completed Tasks"})
                 st.bar_chart(weekly_data)
@@ -242,5 +243,3 @@ with tab5:
                 st.info("No task logging trends found for this week.")
                 
         elif time_frame == "Past Month":
-            st.write("### Monthly Trendline Matrix")
-            start_month = (now - timedelta(days=30)).strftime("%Y-%m-%d")
