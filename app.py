@@ -218,10 +218,10 @@ with tab5:
         df_analytics["created_at"] = df_analytics["created_at"].fillna(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         df_analytics["date_only"] = df_analytics["created_at"].apply(lambda x: x.split(" ")[0])
         
-        time_frame = st.selectbox("Select Analytics Range:", ["Past Day (Hourly View)", "Past Week", "Past Month"])
+        time_frame = st.selectbox("Select Analytics Range:", ["Past Day", "Past Week", "Past Month"])
         now = datetime.now()
         
-        if time_frame == "Past Day (Hourly View)":
+        if time_frame == "Past Day":
             st.write("### Tasks Logged Today")
             today_str = now.strftime("%Y-%m-%d")
             today_df = df_analytics[df_analytics["date_only"] == today_str]
