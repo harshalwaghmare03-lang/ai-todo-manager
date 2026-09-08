@@ -24,7 +24,7 @@ def init_db():
                 )"""
     )
     c.execute("PRAGMA table_info(tasks)")
-    columns = [col[1] for col in c.fetchall()]
+    columns = [col for col in c.fetchall()]
     if "created_at" not in columns:
         c.execute("ALTER TABLE tasks ADD COLUMN created_at TEXT")
     conn.commit()
@@ -215,6 +215,7 @@ with tab5:
     df_analytics = load_tasks()
     
     if not df_analytics.empty:
+        # Secure fallback for date configurations
         df_analytics["created_at"] = df_analytics["created_at"].fillna(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         df_analytics["date_only"] = df_analytics["created_at"].apply(lambda x: x.split(" ")[0])
         
@@ -229,10 +230,10 @@ with tab5:
                 chart_data = today_df.groupby("priority").size().reset_index(name="Task Count")
                 st.bar_chart(data=chart_data, x="priority", y="Task Count")
             else:
-                st.info("No tasks recorded today yet. Add some to populate the chart!")
+                st.info("No tasks recorded today yet.")
                 
         elif time_frame == "Past Week":
-            st.write("### Weekly Complete vs Pending Distribution")
+            st.write("### Weekly Distribution")
             start_week = (now - timedelta(days=7)).strftime("%Y-%m-%d")
             filtered_df = df_analytics[df_analytics["date_only"] >= start_week]
             if not filtered_df.empty:
@@ -240,6 +241,7 @@ with tab5:
                 weekly_data = weekly_data.rename(columns={0: "Pending Tasks", 1: "Completed Tasks"})
                 st.bar_chart(weekly_data)
             else:
-                st.info("No task logging trends found for this week.")
+                st.info("No task trends found for this week.")
                 
         elif time_frame == "Past Month":
+            st.write("### Monthly Completion Trend")
