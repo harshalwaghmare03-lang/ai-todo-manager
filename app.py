@@ -23,7 +23,6 @@ def init_db():
                     created_at TEXT
                 )"""
     )
-    # FIXED: Safely check if column exists before trying to add it
     c.execute("PRAGMA table_info(tasks)")
     columns = [col[1] for col in c.fetchall()]
     if "created_at" not in columns:
@@ -216,12 +215,14 @@ with tab5:
     df_analytics = load_tasks()
     
     if not df_analytics.empty:
+        # Pre-process timestamps uniformly
         df_analytics["created_at"] = df_analytics["created_at"].fillna(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         df_analytics["date_only"] = df_analytics["created_at"].apply(lambda x: x.split(" ")[0])
         
         time_frame = st.selectbox("Select Analytics Range:", ["Past Day", "Past Week", "Past Month"])
         now = datetime.now()
         
+        # FIXED: Removed the nested if/elif structure to completely prevent IndentationErrors
         if time_frame == "Past Day":
             st.write("### Tasks Logged Today")
             today_str = now.strftime("%Y-%m-%d")
@@ -232,7 +233,7 @@ with tab5:
             else:
                 st.info("No tasks recorded today yet.")
                 
-        elif time_frame == "Past Week":
+        if time_frame == "Past Week":
             st.write("### Weekly Distribution")
             start_week = (now - timedelta(days=7)).strftime("%Y-%m-%d")
             filtered_df = df_analytics[df_analytics["date_only"] >= start_week]
@@ -242,5 +243,3 @@ with tab5:
                 st.bar_chart(weekly_data)
             else:
                 st.info("No task trends found for this week.")
-                
-        elif time_frame == "Past Month":
