@@ -4,8 +4,9 @@ import google.generativeai as genai
 import pandas as pd
 import streamlit as st
 
-# Configure Gemini API with your provided key
-genai.configure(api_key="AQ.Ab8RN6JFCw6YBFy806H0IpmxjoQnYXOQ2s78scNObCyZWk78tQ")
+# Configure Gemini API using Streamlit Secrets
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+
 model = genai.GenerativeModel("gemini-3.6-flash")
 
 # Database Initialization with Timestamp tracking
