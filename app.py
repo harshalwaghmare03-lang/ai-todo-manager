@@ -1,12 +1,13 @@
 import sqlite3
 from datetime import datetime, timedelta
-import google.generativeai as genai
+# UPDATED: Importing the modern Google GenAI library primitives
+from google import genai
 import pandas as pd
 import streamlit as st
 
-# Configure Gemini API with your secret key
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel("gemini-3.6-flash")
+# UPDATED: Authenticating with the current GenAI Client initialization standard
+client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+MODEL_NAME = "gemini-3.6-flash"
 
 # Database Initialization with Timestamp tracking
 def init_db():
@@ -24,7 +25,7 @@ def init_db():
                 )"""
     )
     c.execute("PRAGMA table_info(tasks)")
-    columns = [col[1] for col in c.fetchall()]
+    columns = [col for col in c.fetchall()]
     if "created_at" not in columns:
         c.execute("ALTER TABLE tasks ADD COLUMN created_at TEXT")
     conn.commit()
@@ -116,7 +117,9 @@ with tab1:
                     "Return output strictly in this pipe-separated format: Task Title | Due Date (YYYY-MM-DD or 'Today/Tomorrow') | Priority (High/Medium/Low) | Estimated Time (e.g., '30 mins')"
                 )
                 try:
-                    res = model.generate_content(prompt).text.strip()
+                    # UPDATED: Using the modern genai model call format
+                    response = client.models.generate_content(model=MODEL_NAME, contents=prompt)
+                    res = response.text.strip()
                     parts = res.split("|")
                     title = parts[0].strip()
                     due = parts[1].strip()
@@ -164,9 +167,11 @@ with tab2:
             with st.spinner("Breaking down your goal..."):
                 prompt = f"Break down this goal into 4 concrete subtasks: {big_goal}"
                 try:
-                    st.session_state.ai_breakdown = model.generate_content(prompt).text
+                    # UPDATED: genai native SDK content creation format
+                    response = client.models.generate_content(model=MODEL_NAME, contents=prompt)
+                    st.session_state.ai_breakdown = response.text
                 except Exception as e:
-                    st.error("Could not reach AI model. Please check your text input or API status.")
+                    st.error(f"Could not reach AI model: {str(e)}")
         else:
             st.warning("Please enter a valid goal statement.")
                 
@@ -183,7 +188,8 @@ with tab3:
             with st.spinner("AI is organizing your daily schedule..."):
                 prompt = f"Create an optimized chronological hourly time-block schedule for today based on these pending tasks: {pending}"
                 try:
-                    st.session_state.ai_schedule = model.generate_content(prompt).text
+                    response = client.models.generate_content(model=MODEL_NAME, contents=prompt)
+                    st.session_state.ai_schedule = response.text
                 except Exception as e:
                     st.error("Failed to generate schedule from AI engine.")
         else:
@@ -202,7 +208,8 @@ with tab4:
         with st.spinner("Analyzing progress..."):
             prompt = f"I have completed {completed_count} tasks and have {pending_count} pending tasks. Give a short, encouraging productivity coaching summary and actionable advice."
             try:
-                st.session_state.ai_coach_advice = model.generate_content(prompt).text
+                response = client.models.generate_content(model=MODEL_NAME, contents=prompt)
+                st.session_state.ai_coach_advice = response.text
             except Exception as e:
                 st.error("Could not fetch advice from productivity engine.")
             
@@ -215,14 +222,12 @@ with tab5:
     df_analytics = load_tasks()
     
     if not df_analytics.empty:
-        # Pre-process timestamps uniformly
         df_analytics["created_at"] = df_analytics["created_at"].fillna(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         df_analytics["date_only"] = df_analytics["created_at"].apply(lambda x: x.split(" ")[0])
         
         time_frame = st.selectbox("Select Analytics Range:", ["Past Day", "Past Week", "Past Month"])
         now = datetime.now()
         
-        # FIXED: Removed the nested if/elif structure to completely prevent IndentationErrors
         if time_frame == "Past Day":
             st.write("### Tasks Logged Today")
             today_str = now.strftime("%Y-%m-%d")
@@ -237,9 +242,3 @@ with tab5:
             st.write("### Weekly Distribution")
             start_week = (now - timedelta(days=7)).strftime("%Y-%m-%d")
             filtered_df = df_analytics[df_analytics["date_only"] >= start_week]
-            if not filtered_df.empty:
-                weekly_data = filtered_df.groupby(["date_only", "done"]).size().unstack(fill_value=0)
-                weekly_data = weekly_data.rename(columns={0: "Pending Tasks", 1: "Completed Tasks"})
-                st.bar_chart(weekly_data)
-            else:
-                st.info("No task trends found for this week.")
