@@ -23,8 +23,9 @@ def init_db():
                     created_at TEXT
                 )"""
     )
+    # FIXED: Safely check if column exists before trying to add it
     c.execute("PRAGMA table_info(tasks)")
-    columns = [col for col in c.fetchall()]
+    columns = [col[1] for col in c.fetchall()]
     if "created_at" not in columns:
         c.execute("ALTER TABLE tasks ADD COLUMN created_at TEXT")
     conn.commit()
@@ -79,7 +80,7 @@ df_score = load_tasks()
 if not df_score.empty:
     total_tasks = len(df_score)
     completed_tasks = len(df_score[df_score["done"] == 1])
-    score = int((completed_tasks / total_tasks) * 100)
+    score = int((completed_tasks / total_tasks) * 100) if total_tasks > 0 else 0
     
     st.sidebar.metric(label="Productivity Score", value=f"{score}/100", delta=f"{completed_tasks} completed")
     st.sidebar.progress(score / 100)
@@ -215,7 +216,6 @@ with tab5:
     df_analytics = load_tasks()
     
     if not df_analytics.empty:
-        # Secure fallback for date configurations
         df_analytics["created_at"] = df_analytics["created_at"].fillna(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         df_analytics["date_only"] = df_analytics["created_at"].apply(lambda x: x.split(" ")[0])
         
@@ -244,4 +244,3 @@ with tab5:
                 st.info("No task trends found for this week.")
                 
         elif time_frame == "Past Month":
-            st.write("### Monthly Completion Trend")
